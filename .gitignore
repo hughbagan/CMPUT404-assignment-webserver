@@ -1,4 +1,8 @@
+venv/
 *.py[cod]
+
+# emacs
+*~
 
 # C extensions
 *.so
