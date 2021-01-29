@@ -1,5 +1,6 @@
 #  coding: utf-8 
 import socketserver
+import os
 
 # Copyright 2013 Abram Hindle, Eddie Antonio Santos
 # 
@@ -29,66 +30,88 @@ import socketserver
 
 class MyWebServer(socketserver.BaseRequestHandler):
 
+    # Constant headers
     HTTP_200 = b'HTTP/1.1 200 OK'
+    HTTP_301 = b'HTTP/1.1 301 Moved Permanently'
     HTTP_404 = b'HTTP/1.1 404 Not Found'
+    HTTP_405 = b'HTTP/1.1 405 Method Not Allowed'
     CT_HTML = b'Content-Type: text/html'
     CT_CSS = b'Content-Type: text/css'
     
     def handle(self):
-        # "For stream services, self.request is a TCP socket object connected 
+        # "For stream services, self.request is a TCP socket object connected
         # to the client" -py docs
         self.data = self.request.recv(1024).strip()
-        print ("Got a request of: %s" % self.data)
+        #print ("Got a request of: %s" % self.data)
         self.data = self.data.decode("utf-8")
-        print(self.data)
         # Parse data for request type and respond accordingly
-        # eg. serve /www/index.html
-        parts = self.data.splitlines() # edge cases? probably should use regex.
+        parts = self.data.splitlines() # edge cases? probably should use regex
         print(parts)
         method = None
         for req_method in ["GET","POST","DELETE","PUT"]:
             if req_method in parts[0]:
                 method = req_method
-        # In lieu of a switch statement...
-        if method=="GET":
-            # What exactly do they want?
+        # In lieu of a switch statement or state machine...
+        if method == "GET":
             (m, url, http) = parts[0].split()
-            print(m, url, http)
-            #if url != '/': # as long as we're not getting root...
+            # Format the url for open()
             if url[0]=='/':
                 url = url[1:]
-            if "www" not in url:
+            if "www/" not in url:
                 url = "www/" + url
             print(url)
+            # Convert the requested file for payload, or handle edge cases
             try:
-                target = open(url, mode='r+b').read() # bytes object
-            except FileNotFoundError:
-                target = "NotFound"
+                payload = open(url, mode='r+b').read() # bytes object
+            except (FileNotFoundError, PermissionError):
+                payload = "NotFound"
             except IsADirectoryError:
-                # Maybe they are trying to get root?
-                target = bytes(url,'utf-8') 
+                # or serve html for directories
+                if url[len(url)-1] != '/': 
+                    # Missing end slash / => redirect to correct path ending
+                    url += '/'
+                    payload = "Redirect"
+                elif os.path.isfile(url+'index.html'):
+                    # Serve this dir's index.html at /
+                    url += 'index.html'
+                    payload = open(url, mode='r+b').read()
+                else:
+                    payload = bytes(url,'utf-8')+b'\n'
             
-            if target == "NotFound":
-                to_send = self.HTTP_404+b'\n\n' \
+            if payload == "NotFound":
+                to_send = self.HTTP_404+b'\n' \
                         + self.CT_HTML+b'\n\n' \
-                        + b'<p>404 Not Found</p>'
+                        + b'<p>404 Not Found</p>\n'
+            elif payload =="Redirect":
+                # Undo the formatting done above...
+                url = url.replace("www/", "")
+                url = '/' + url
+                print(url)
+                to_send = self.HTTP_301+b'\n' \
+                        + b'Location: '+bytes(url,'utf-8')+b'\n\n'
+                        #+ self.CT_HTML+b'\n\n' \ # TODO send HTML to user?
+                        #+ bytes("<p>Moved to "+url+"</p>")+b'\n'
+                print(to_send)
             elif ".html" in url:
                 to_send = self.HTTP_200+b'\n' \
                         + self.CT_HTML+b'\n\n' \
-                        + target
+                        + payload
             elif ".css" in url:
                 to_send = self.HTTP_200+b'\n' \
                         + self.CT_CSS+b'\n\n' \
-                        + target
+                        + payload
             else:
                 to_send = self.HTTP_200+b'\n' \
                         + self.CT_HTML+b'\n\n' \
-                        + target
-            self.request.sendall(to_send)
-        else: # Some other method I don't know...
-            self.request.sendall(bytearray("OK",'utf-8'))
-        print()
+                        + payload
+        else: 
+            # This method isn't handled; respond with 405
+            to_send = self.HTTP_405+b'\n' \
+                    + self.CT_HTML+b'\n\n' \
+                    + b'<p>405 Method Not Allowed\n'
         
+        self.request.sendall(to_send)
+        print()
 
 
 if __name__ == "__main__":
