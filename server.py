@@ -27,7 +27,6 @@ import os
 
 # try: curl -v -X GET http://127.0.0.1:8080/
 
-
 class MyWebServer(socketserver.BaseRequestHandler):
 
     # Constant headers
@@ -39,8 +38,7 @@ class MyWebServer(socketserver.BaseRequestHandler):
     CT_CSS = b'Content-Type: text/css'
     
     def handle(self):
-        # "For stream services, self.request is a TCP socket object connected
-        # to the client" -py docs
+        # "self.request is a TCP socket object connected to the client" -docs
         self.data = self.request.recv(1024).strip()
         #print ("Got a request of: %s" % self.data)
         self.data = self.data.decode("utf-8")
@@ -49,7 +47,7 @@ class MyWebServer(socketserver.BaseRequestHandler):
         print(parts)
         method = None
         for req_method in ["GET","POST","DELETE","PUT"]:
-            if req_method in parts[0]:
+            if req_method in self.data: # probably bad, oh well
                 method = req_method
         # In lieu of a switch statement or state machine...
         if method == "GET":
@@ -59,58 +57,57 @@ class MyWebServer(socketserver.BaseRequestHandler):
                 url = url[1:]
             if "www/" not in url:
                 url = "www/" + url
-            print(url)
-            # Convert the requested file for payload, or handle edge cases
+            # Get the requested file to be the payload, or handle edge cases
             try:
                 payload = open(url, mode='r+b').read() # bytes object
             except (FileNotFoundError, PermissionError):
                 payload = "NotFound"
             except IsADirectoryError:
-                # or serve html for directories
                 if url[len(url)-1] != '/': 
                     # Missing end slash / => redirect to correct path ending
                     url += '/'
                     payload = "Redirect"
                 elif os.path.isfile(url+'index.html'):
                     # Serve this dir's index.html at /
+                    # eg. /deep/ will display /deep/index.html
                     url += 'index.html'
                     payload = open(url, mode='r+b').read()
                 else:
+                    # This dir has no index.html, just do whatever
                     payload = bytes(url,'utf-8')+b'\n'
-            
+            # Assemble the response as bytes
             if payload == "NotFound":
-                to_send = self.HTTP_404+b'\n' \
-                        + self.CT_HTML+b'\n\n' \
-                        + b'<p>404 Not Found</p>\n'
+                response = self.HTTP_404+b'\n' \
+                         + self.CT_HTML+b'\n\n' \
+                         + b'<p>404 Not Found</p>\n'
             elif payload =="Redirect":
                 # Undo the formatting done above...
                 url = url.replace("www/", "")
                 url = '/' + url
-                print(url)
-                to_send = self.HTTP_301+b'\n' \
-                        + b'Location: '+bytes(url,'utf-8')+b'\n\n'
-                        #+ self.CT_HTML+b'\n\n' \ # TODO send HTML to user?
-                        #+ bytes("<p>Moved to "+url+"</p>")+b'\n'
-                print(to_send)
+                html_str = "<p>Moved to {}</p>".format(url)
+                response = self.HTTP_301+b'\n' \
+                         + b'Location: '+bytes(url,'utf-8')+b'\n' \
+                         + self.CT_HTML+b'\n\n' \
+                         + bytes(html_str,'utf-8')+b'\n'
+                print(response)
             elif ".html" in url:
-                to_send = self.HTTP_200+b'\n' \
-                        + self.CT_HTML+b'\n\n' \
-                        + payload
+                response = self.HTTP_200+b'\n' \
+                         + self.CT_HTML+b'\n\n' \
+                         + payload
             elif ".css" in url:
-                to_send = self.HTTP_200+b'\n' \
-                        + self.CT_CSS+b'\n\n' \
-                        + payload
+                response = self.HTTP_200+b'\n' \
+                         + self.CT_CSS+b'\n\n' \
+                         + payload
             else:
-                to_send = self.HTTP_200+b'\n' \
-                        + self.CT_HTML+b'\n\n' \
-                        + payload
+                response = self.HTTP_200+b'\n' \
+                         + self.CT_HTML+b'\n\n' \
+                         + payload
         else: 
             # This method isn't handled; respond with 405
-            to_send = self.HTTP_405+b'\n' \
-                    + self.CT_HTML+b'\n\n' \
-                    + b'<p>405 Method Not Allowed\n'
-        
-        self.request.sendall(to_send)
+            response = self.HTTP_405+b'\n' \
+                     + self.CT_HTML+b'\n\n' \
+                     + b'<p>405 Method Not Allowed\n'
+        self.request.sendall(response)
         print()
 
 
