@@ -24,3 +24,19 @@ examples thus some of the code is Copyright © 2001-2013 Python
 Software Foundation; All Rights Reserved under the PSF license (GPL
 compatible) http://docs.python.org/2/library/socketserver.html
 
+---
+
+## Sources
+
+* Luky. "How to properly send HTTP response with Python using socket library only?" https://stackoverflow.com/a/28056437
+* Python docs. "socketserver" https://docs.python.org/3.6/library/socketserver.html
+* Python docs. "socket" https://docs.python.org/3.6/library/socket.html
+* Python docs. "os.path.isfile" https://docs.python.org/3.6/library/os.path.html#os.path.isfile
+
+## Screenshots
+
+root.png
+![](root.png)
+
+deep.png
+![](deep.png)
