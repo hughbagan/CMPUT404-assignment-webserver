@@ -1,3 +1,10 @@
+www/hardcode/
+
+# emacs
+*~
+
+# python
+venv/
 *.py[cod]
 
 # C extensions
